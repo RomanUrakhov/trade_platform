@@ -176,15 +176,13 @@ def add_offer_sell():
     user_id = g.user.id
     item_id = request.json.get('item_id')
     price = request.json.get('price')
-    status_id = request.json.get('status_id')
 
-    if user_id and item_id and price and status_id:
+    if user_id and item_id and price:
 
         try:
             int(user_id)
             int(item_id)
             float(price)
-            int(status_id)
         except ValueError:
             return jsonify({
                 "message": "an argument of incorrect type was specified"
@@ -236,7 +234,7 @@ def add_offer_sell():
         offer_sell = OfferSell()
         offer_sell.user_id = user_id
         offer_sell.item_id = item_id
-        offer_sell.status_id = status_id
+        offer_sell.status_id = 1
         offer_sell.price = price
 
         db.session.add(offer_sell)
@@ -266,15 +264,12 @@ def add_offer_buy():
     user_id = g.user.id
     item_id = request.json.get('item_id')
     price = request.json.get('price')
-    status_id = request.json.get('status_id')
 
-    if user_id and item_id and price and status_id:
-
+    if user_id and item_id and price:
         try:
             int(user_id)
             int(item_id)
             float(price)
-            int(status_id)
         except ValueError:
             return jsonify({
                 "message": "an argument of incorrect type was specified"
@@ -305,7 +300,7 @@ def add_offer_buy():
         offer_buy = OfferBuy()
         offer_buy.user_id = user_id
         offer_buy.item_id = item_id
-        offer_buy.status_id = status_id
+        offer_buy.status_id = 1
         offer_buy.price = price
 
         db.session.add(offer_buy)
@@ -342,20 +337,33 @@ def edit_offer_sell(ofr_id):
             "message": "there is no offer with the specified id"
         })
 
-    if status_id:
+    if g.user.id != offer_exists.user_id:
+        return jsonify({
+            "message": "Insufficient access rights. The specified offer is not published by you."
+        })
 
+    if offer_exists.status_id in [2, 3]:
+        return jsonify({
+            "message": "You cannot change an offer that has been completed or canceled."
+        })
+
+    if status_id:
         try:
             int(status_id)
         except ValueError:
             return jsonify({
                 "message": "an argument of incorrect type was specified"
             })
+        if status_id == 2:
+            return jsonify({
+                "message": "You can only cancel an offer, not mark it as completed"
+            })
 
         OfferSell.query.filter(OfferSell.id == ofr_id).update({"status_id": status_id})
         db.session.commit()
         return jsonify({
             "id": ofr_id,
-            "user_id": offer_exists.user_id,
+            "user_id": g.user.id,
             "item_id": offer_exists.item_id,
             "price": offer_exists.price,
             "status_id": offer_exists.status_id,
@@ -363,7 +371,6 @@ def edit_offer_sell(ofr_id):
         })
 
     if price or item_id:
-
         try:
             if item_id:
                 int(item_id)
@@ -372,6 +379,13 @@ def edit_offer_sell(ofr_id):
         except ValueError:
             return jsonify({
                 "message": "an argument of incorrect type was specified"
+            })
+
+        inventory_items = [row.id_item for row in db.session.execute(
+            'SELECT * FROM get_inventory(:x)', {"x": g.user.id})]
+        if item_id not in inventory_items:
+            return jsonify({
+                "message": "there is no item with such id in your inventory"
             })
 
         update_info = {key: value for key, value in zip(['item_id', 'price'], [item_id, price]) if value is not None}
@@ -407,13 +421,27 @@ def edit_offer_buy(ofr_id):
             "message": "there is no offer with the specified id"
         })
 
-    if status_id:
+    if g.user.id != offer_exists.user_id:
+        return jsonify({
+            "message": "Insufficient access rights. The specified offer is not published by you."
+        })
 
+    if offer_exists.status_id in [2, 3]:
+        return jsonify({
+            "message": "You cannot change an offer that has been completed or canceled."
+        })
+
+    if status_id:
         try:
             int(status_id)
         except ValueError:
             return jsonify({
                 "message": "an argument of incorrect type was specified"
+            })
+
+        if status_id == 2:
+            return jsonify({
+                "message": "You can only cancel an offer, not mark it as completed"
             })
 
         OfferBuy.query.filter(OfferBuy.id == ofr_id).update({"status_id": status_id})
@@ -428,7 +456,6 @@ def edit_offer_buy(ofr_id):
         })
 
     if price or item_id:
-
         try:
             if item_id:
                 int(item_id)
@@ -439,12 +466,19 @@ def edit_offer_buy(ofr_id):
                 "message": "an argument of incorrect type was specified"
             })
 
+        inventory_items = [row.id_item for row in db.session.execute(
+            'SELECT * FROM get_inventory(:x)', {"x": g.user.id})]
+        if item_id in inventory_items:
+            return jsonify({
+                "message": "the specified item is already in your inventory"
+            })
+
         update_info = {key: value for key, value in zip(['item_id', 'price'], [item_id, price]) if value}
         OfferBuy.query.filter(OfferBuy.id == ofr_id).update(update_info)
         db.session.commit()
         return jsonify({
             "id": ofr_id,
-            "user_id": offer_exists.user_id,
+            "user_id": g.user.id,
             "item_id": offer_exists.item_id,
             "price": offer_exists.price,
             "status_id": offer_exists.status_id,
