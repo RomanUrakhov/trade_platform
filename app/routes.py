@@ -173,7 +173,7 @@ def add_offer_sell():
     if request.headers.get('Content-Type') != 'application/json':
         abort(400, {"message": "The request doesn't contain 'Application/json' header or its Body is empty"})
 
-    user_id = request.json.get('user_id')
+    user_id = g.user.id
     item_id = request.json.get('item_id')
     price = request.json.get('price')
     status_id = request.json.get('status_id')
@@ -190,7 +190,24 @@ def add_offer_sell():
                 "message": "an argument of incorrect type was specified"
             })
 
-        existing_offer = OfferSell.query.filter(OfferSell.item_id == item_id, OfferSell.status_id == 1).first()
+        existing_item = Item.query.get(item_id)
+        if not existing_item:
+            return jsonify({
+                "message": "there is no item with such id"
+            })
+
+        inventory_items = [row.id_item for row in db.session.execute(
+            'SELECT * FROM get_inventory(:x)', {"x": user_id})]
+        if item_id not in inventory_items:
+            return jsonify({
+                "message": "there is no item with such id in your inventory"
+            })
+
+        existing_offer = OfferSell.query.filter(
+            OfferSell.item_id == item_id,
+            OfferSell.status_id == 1,
+            OfferSell.user_id == user_id
+        ).first()
         if existing_offer:
             return jsonify({
                 "message": "you have already put up an offer to sell the specified item"
@@ -246,7 +263,7 @@ def add_offer_buy():
     if request.headers.get('Content-Type') != 'application/json':
         abort(400, {"message": "The request doesn't contain 'Application/json' header or its Body is empty"})
 
-    user_id = request.json.get('user_id')
+    user_id = g.user.id
     item_id = request.json.get('item_id')
     price = request.json.get('price')
     status_id = request.json.get('status_id')
@@ -263,7 +280,23 @@ def add_offer_buy():
                 "message": "an argument of incorrect type was specified"
             })
 
-        existing_offer = OfferBuy.query.filter(db.or_(OfferBuy.item_id == item_id, OfferBuy.status_id == 1)).first()
+        existing_item = Item.query.get(item_id)
+        if not existing_item:
+            return jsonify({
+                "message": "there is no item with such id"
+            })
+
+        inventory_items = [row.id_item for row in db.session.execute(
+            'SELECT * FROM get_inventory(:x)', {"x": user_id})]
+        if item_id in inventory_items:
+            return jsonify({
+                "message": "the specified item is already in your inventory"
+            })
+
+        existing_offer = OfferBuy.query.filter(
+            OfferBuy.item_id == item_id,
+            OfferBuy.status_id == 1,
+            OfferBuy.user_id == user_id).first()
         if existing_offer:
             return jsonify({
                 "message": "you have already put up an offer to buy the specified item"
