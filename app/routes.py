@@ -40,8 +40,8 @@ def get_user(usr_id):
         })
     else:
         return jsonify(({
-            'message': 'there is no user with specified id'
-        }))
+            'message': 'there is no user with the specified id'
+        })), 404
 
 
 @app.route("/api/users", methods=['POST'])
@@ -66,7 +66,7 @@ def signup_user():
             db.session.rollback()
             return jsonify({
                 'message': 'the user with the specified login already exists'
-            })
+            }), 409
         db.session.refresh(new_user)
 
         return jsonify({
@@ -74,7 +74,7 @@ def signup_user():
         }), 201, {"Location": url_for('get_user', usr_id=new_user.id, _external=True)}
     return jsonify({
         'message': 'none of the specified arguments can be empty'
-    })
+    }), 400
 
 
 @app.route("/api/offers/buy", methods=['GET'])
@@ -87,7 +87,7 @@ def get_offers_buy():
         return jsonify({
             "message": "you are not allowed to pass both 'item_id' and "
                        "'item_name' parameters. Choose one of these filters"
-        })
+        }), 400
 
     if not (user_id.isdigit() and item_id.isdigit()):
         abort(400, {"message": "invalid parameters type passed"})
@@ -102,7 +102,7 @@ def get_offers_buy():
         if not appropriate_ids:
             return jsonify({
                 "message": "there are no items with such name"
-            })
+            }), 404
         query = query.filter(OfferBuy.item_id.in_(appropriate_ids))
 
     result = query.all()
@@ -110,7 +110,7 @@ def get_offers_buy():
     if not result:
         return jsonify({
             "message": "there are no purchasing offers with such filter(s)"
-        })
+        }), 404
     response = [{
         'id': row.id,
         'user_id': row.user_id,
@@ -132,7 +132,7 @@ def get_offers_sell():
         return jsonify({
             "message": "you are not allowed to pass both 'item_id' and "
                        "'item_name' parameters. Choose one of these filters"
-        })
+        }), 400
 
     if not (user_id.isdigit() and item_id.isdigit()):
         abort(400, {"message": "invalid parameters type passed"})
@@ -147,7 +147,7 @@ def get_offers_sell():
         if not appropriate_ids:
             return jsonify({
                 "message": "there are no items with such name"
-            })
+            }), 404
         query = query.filter(OfferSell.item_id.in_(appropriate_ids))
 
     result = query.all()
@@ -155,7 +155,7 @@ def get_offers_sell():
     if not result:
         return jsonify({
             "message": "there are no selling offers with such filter(s)"
-        })
+        }), 404
     response = [{
         'id': row.id,
         'user_id': row.user_id,
@@ -186,20 +186,20 @@ def add_offer_sell():
         except ValueError:
             return jsonify({
                 "message": "an argument of incorrect type was specified"
-            })
+            }), 400
 
         existing_item = Item.query.get(item_id)
         if not existing_item:
             return jsonify({
                 "message": "there is no item with such id"
-            })
+            }), 404
 
         inventory_items = [row.id_item for row in db.session.execute(
             'SELECT * FROM get_inventory(:x)', {"x": user_id})]
         if item_id not in inventory_items:
             return jsonify({
                 "message": "there is no item with such id in your inventory"
-            })
+            }), 404
 
         existing_offer = OfferSell.query.filter(
             OfferSell.item_id == item_id,
@@ -209,7 +209,7 @@ def add_offer_sell():
         if existing_offer:
             return jsonify({
                 "message": "you have already put up an offer to sell the specified item"
-            })
+            }), 409
 
         # нужно будет проверить last_sell, потому что может вернуться пустое значение (самая первая продажа)
         last_sell = OfferSell.query.filter(
@@ -229,7 +229,7 @@ def add_offer_sell():
                         '%Hh:%Mm',
                         time.gmtime((timedelta(hours=24) - time_passed).total_seconds())
                     )
-                })
+                }), 409
 
         offer_sell = OfferSell()
         offer_sell.user_id = user_id
@@ -252,7 +252,7 @@ def add_offer_sell():
     else:
         return jsonify({
             "message": "none of the specified arguments can be empty"
-        })
+        }), 400
 
 
 @app.route("/api/offers/buy", methods=['POST'])
@@ -273,20 +273,20 @@ def add_offer_buy():
         except ValueError:
             return jsonify({
                 "message": "an argument of incorrect type was specified"
-            })
+            }), 400
 
         existing_item = Item.query.get(item_id)
         if not existing_item:
             return jsonify({
                 "message": "there is no item with such id"
-            })
+            }), 404
 
         inventory_items = [row.id_item for row in db.session.execute(
             'SELECT * FROM get_inventory(:x)', {"x": user_id})]
         if item_id in inventory_items:
             return jsonify({
                 "message": "the specified item is already in your inventory"
-            })
+            }), 409
 
         existing_offer = OfferBuy.query.filter(
             OfferBuy.item_id == item_id,
@@ -295,7 +295,7 @@ def add_offer_buy():
         if existing_offer:
             return jsonify({
                 "message": "you have already put up an offer to buy the specified item"
-            })
+            }), 409
 
         offer_buy = OfferBuy()
         offer_buy.user_id = user_id
@@ -318,7 +318,7 @@ def add_offer_buy():
     else:
         return jsonify({
             "message": "none of the specified arguments can be empty"
-        })
+        }), 400
 
 
 @app.route("/api/offers/sell/<int:ofr_id>", methods=['PUT'])
@@ -335,17 +335,17 @@ def edit_offer_sell(ofr_id):
     if not offer_exists:
         return jsonify({
             "message": "there is no offer with the specified id"
-        })
+        }), 404
 
     if g.user.id != offer_exists.user_id:
         return jsonify({
             "message": "Insufficient access rights. The specified offer is not published by you."
-        })
+        }), 403
 
     if offer_exists.status_id in [2, 3]:
         return jsonify({
-            "message": "You cannot change an offer that has been completed or canceled."
-        })
+            "message": "You cannot change an offer that was completed or canceled."
+        }), 409
 
     if status_id:
         try:
@@ -353,11 +353,11 @@ def edit_offer_sell(ofr_id):
         except ValueError:
             return jsonify({
                 "message": "an argument of incorrect type was specified"
-            })
+            }), 400
         if status_id == 2:
             return jsonify({
                 "message": "You can only cancel an offer, not mark it as completed"
-            })
+            }), 409
 
         OfferSell.query.filter(OfferSell.id == ofr_id).update({"status_id": status_id})
         db.session.commit()
@@ -379,14 +379,14 @@ def edit_offer_sell(ofr_id):
         except ValueError:
             return jsonify({
                 "message": "an argument of incorrect type was specified"
-            })
+            }), 400
 
         inventory_items = [row.id_item for row in db.session.execute(
             'SELECT * FROM get_inventory(:x)', {"x": g.user.id})]
         if item_id not in inventory_items:
             return jsonify({
                 "message": "there is no item with such id in your inventory"
-            })
+            }), 404
 
         update_info = {key: value for key, value in zip(['item_id', 'price'], [item_id, price]) if value is not None}
         OfferSell.query.filter(OfferSell.id == ofr_id).update(update_info)
@@ -402,7 +402,7 @@ def edit_offer_sell(ofr_id):
     else:
         return jsonify({
             "message": "there can be no empty arguments in the request"
-        })
+        }), 400
 
 
 @app.route("/api/offers/buy/<int:ofr_id>", methods=['PUT'])
@@ -419,17 +419,17 @@ def edit_offer_buy(ofr_id):
     if not offer_exists:
         return jsonify({
             "message": "there is no offer with the specified id"
-        })
+        }), 400
 
     if g.user.id != offer_exists.user_id:
         return jsonify({
             "message": "Insufficient access rights. The specified offer is not published by you."
-        })
+        }), 403
 
     if offer_exists.status_id in [2, 3]:
         return jsonify({
             "message": "You cannot change an offer that has been completed or canceled."
-        })
+        }), 409
 
     if status_id:
         try:
@@ -437,12 +437,12 @@ def edit_offer_buy(ofr_id):
         except ValueError:
             return jsonify({
                 "message": "an argument of incorrect type was specified"
-            })
+            }), 400
 
         if status_id == 2:
             return jsonify({
                 "message": "You can only cancel an offer, not mark it as completed"
-            })
+            }), 409
 
         OfferBuy.query.filter(OfferBuy.id == ofr_id).update({"status_id": status_id})
         db.session.commit()
@@ -464,14 +464,14 @@ def edit_offer_buy(ofr_id):
         except ValueError:
             return jsonify({
                 "message": "an argument of incorrect type was specified"
-            })
+            }), 400
 
         inventory_items = [row.id_item for row in db.session.execute(
             'SELECT * FROM get_inventory(:x)', {"x": g.user.id})]
         if item_id in inventory_items:
             return jsonify({
                 "message": "the specified item is already in your inventory"
-            })
+            }), 409
 
         update_info = {key: value for key, value in zip(['item_id', 'price'], [item_id, price]) if value}
         OfferBuy.query.filter(OfferBuy.id == ofr_id).update(update_info)
@@ -487,7 +487,7 @@ def edit_offer_buy(ofr_id):
     else:
         return jsonify({
             "message": "there can be no empty arguments in the request"
-        })
+        }), 400
 
 
 @app.route("/api/users/<int:usr_id>/activity", methods=['GET'])
@@ -542,7 +542,7 @@ def make_deposit(usr_id):
     if not amount:
         return jsonify({
             "message": "the field 'amount' cannot be empty"
-        })
+        }), 400
     try:
         float(amount)
     except ValueError:
@@ -552,7 +552,7 @@ def make_deposit(usr_id):
     if not existing_user:
         return jsonify({
             "message": "there is no user with such id"
-        })
+        }), 404
 
     sender_acc = Account.query.filter(Account.owner_id == g.user.id, Account.obj_type_id == 1).first()
     receiver_acc = Account.query.filter(Account.owner_id == usr_id, Account.obj_type_id == 1).first()
@@ -592,13 +592,13 @@ def create_item_type():
     if not title:
         return jsonify({
             "message": "the arguments of the request cannot be empty"
-        })
+        }), 400
 
     existing_title = ObjectType.query.filter(ObjectType.title == title).first()
     if existing_title:
         return jsonify({
             "message": "the item type with such title already exists"
-        })
+        }), 409
 
     item_type = ObjectType()
     item_type.title = title
@@ -617,7 +617,7 @@ def get_item_info(itm_id):
     if not item:
         return jsonify({
             'message': 'there is no item with such id'
-        })
+        }), 404
 
     rs = db.session.query(func.get_item_owner(itm_id).label("owner_id")).all()
     resales_count = len(OfferSell.query.filter(
@@ -648,7 +648,7 @@ def get_top_items():
     except ValueError:
         return jsonify({
             "message": "the specified arguments should be 'datetime' compatible (YYYY-MM-DD)"
-        })
+        }), 400
 
     result = db.session.execute("SELECT count(i.name) as c, i.name FROM offer_sell as os "
                                 "JOIN item as i ON i.id = os.item_id "
@@ -718,7 +718,7 @@ def get_revenue():
     except ValueError:
         return jsonify({
             "message": "the specified arguments should be 'datetime' compatible (YYYY-MM-DD)"
-        })
+        }), 400
 
     result = db.session.execute('SELECT * FROM get_balance(:x, :y, :z)',
                                 {'x': g.user.id, 'y': from_date, 'z': to_date}).first()[0]
@@ -759,14 +759,14 @@ def set_market_commission():
     if not commission:
         return jsonify({
             "message": "required argument 'commission' cannot be empty"
-        })
+        }), 400
 
     try:
         float(commission)
     except ValueError:
         return jsonify({
             "message": "incorrect type of specified argument 'commission'. Should be float or int"
-        })
+        }), 400
 
     current_fee_id = db.session.execute('SELECT id FROM trade_fee WHERE "end"=:x', {'x': 'infinity'}).first()[0]
     db.session.execute('INSERT INTO trade_fee(start, fee) VALUES (NOW(), :y)', {'y': commission})
