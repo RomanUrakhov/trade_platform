@@ -44,3 +44,21 @@ API, предоставляющий взаимодействие с биржей
 * получение списка предложение о продаже (```route: /api/offers/sell method: GET```)
 * получение информации о предмете (```route: /api/items/<int:itm_id> method: GET```)
 * получение топ-3 самых продаваемых предметов (```route: /api/items/top method: GET```)
+
+## Запуск:
+1. Импорт дампа бд:
+```bash
+cat db.sql | psql -h hostname -U username dbname
+```
+2. Установка переменной окружения ```DATABSE_URI```:    
+```bash
+export DATABASE_URI="postgresql://user:mypassword@localhost:5432/database"
+```
+3. Установка переменной окружения ```APP_SETTINGS```:    
+```bash
+export APP_SETTINGS="config.DevelopmentConfig"
+```
+4. Запуск сервера:
+```bash
+python runner.py
+```
